@@ -55,3 +55,15 @@ jobs:
             --display-name minecraft-server \
             --assign-public-ip true \
             --ssh-authorized-keys-file <(echo "${{ secrets.OCI_SSH_PUBLIC_KEY }}")
+
+      - name: Send Telegram Notification
+        if: success() # Yalnızca sunucu başarıyla kurulursa çalışır
+        run: |
+          TOKEN="${{ secrets.TELEGRAM_BOT_TOKEN }}"
+          CHAT_ID="${{ secrets.TELEGRAM_CHAT_ID }}"
+          MESSAGE="🎉 *Oracle Sunucusu Kuruldu!*%0A%0AFrankfurt'taki 4 OCPU / 24GB RAM sunucun başarıyla açıldı. Otomasyonu kapatmayı unutma!"
+          
+          curl -s -X POST "https://api.telegram.org/bot$TOKEN/sendMessage" \
+            -d "chat_id=$CHAT_ID" \
+            -d "text=$MESSAGE" \
+            -d "parse_mode=Markdown"
