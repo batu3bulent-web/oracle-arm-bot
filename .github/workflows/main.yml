@@ -5,10 +5,13 @@ on:
   repository_dispatch: # Dış cron servislerinden (cron-job.org vb.) istek gelince çalışması için
     types: [trigger-retry]
   schedule:
-    - cron: '*/5 * * * *' # GitHub'ın kendi zamanlayıcısı (yedek olarak dursun)
+    - cron: '*/5 * * * *' # 5 dakikada bir sunucu alma denemesi
+    - cron: '0 19 * * *'  # Her gün TSI 22:00'da (UTC 19:00) günlük rapor gönderimi
 
 jobs:
   launch:
+    # Bu iş yalnızca cron '0 19 * * *' (Rapor saati) OLMADIĞINDA veya dışarıdan tetiklendiğinde çalışır
+    if: github.event.schedule != '0 19 * * *'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -56,12 +59,28 @@ jobs:
             --assign-public-ip true \
             --ssh-authorized-keys-file <(echo "${{ secrets.OCI_SSH_PUBLIC_KEY }}")
 
-      - name: Send Telegram Notification
+      - name: Send Success Telegram Notification
         if: success() # Yalnızca sunucu başarıyla kurulursa çalışır
         run: |
           TOKEN="${{ secrets.TELEGRAM_BOT_TOKEN }}"
           CHAT_ID="${{ secrets.TELEGRAM_CHAT_ID }}"
           MESSAGE="🎉 *Oracle Sunucusu Kuruldu!*%0A%0AFrankfurt'taki 4 OCPU / 24GB RAM sunucun başarıyla açıldı. Otomasyonu kapatmayı unutma!"
+          
+          curl -s -X POST "https://api.telegram.org/bot$TOKEN/sendMessage" \
+            -d "chat_id=$CHAT_ID" \
+            -d "text=$MESSAGE" \
+            -d "parse_mode=Markdown"
+
+  daily-report:
+    # Bu iş yalnızca her gün belirlenen saatte (UTC 19:00 / TSI 22:00) çalışır
+    if: github.event.schedule == '0 19 * * *'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Daily Health Check Report
+        run: |
+          TOKEN="${{ secrets.TELEGRAM_BOT_TOKEN }}"
+          CHAT_ID="${{ secrets.TELEGRAM_CHAT_ID }}"
+          MESSAGE="📊 *Günlük Otomasyon Raporu*%0A%0AOracle sunucu arama botun arka planda tıkır tıkır çalışmaya devam ediyor! Henüz boş kapasite yakalanamadı, denemelere devam ediliyor. 🤖"
           
           curl -s -X POST "https://api.telegram.org/bot$TOKEN/sendMessage" \
             -d "chat_id=$CHAT_ID" \
