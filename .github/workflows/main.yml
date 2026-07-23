@@ -29,17 +29,21 @@ jobs:
           echo "[DEFAULT]" > ~/.oci/config
           echo "user=${{ secrets.OCI_USER_OCID }}" >> ~/.oci/config
           echo "fingerprint=${{ secrets.OCI_FINGERPRINT }}" >> ~/.oci/config
-          echo "key_file=~/.oci/oci_api_key.pem" >> ~/.oci/config
+          echo "key_file=/home/runner/.oci/oci_api_key.pem" >> ~/.oci/config
           echo "tenancy=${{ secrets.OCI_TENANCY_OCID }}" >> ~/.oci/config
           echo "region=eu-frankfurt-1" >> ~/.oci/config
-          echo "${{ secrets.OCI_KEY_FILE }}" > ~/.oci/oci_api_key.pem
+          
+          # Key dosyasını güvenli şekilde yaz ve izinleri ayarla
+          printf "%s\n" "${{ secrets.OCI_PRIVATE_KEY }}" > ~/.oci/oci_api_key.pem
           chmod 600 ~/.oci/oci_api_key.pem
+          chmod 600 ~/.oci/config
 
       - name: Launch VM
         continue-on-error: true
         shell: bash
         env:
           SUPPRESS_LABEL_WARNING: "True"
+          OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING: "True"
         run: |
           oci compute instance launch \
             --availability-domain "${{ matrix.ad }}" \
