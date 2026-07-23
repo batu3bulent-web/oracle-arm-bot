@@ -1,9 +1,11 @@
 name: Oracle VM Auto Retry
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # Manuel çalıştırmak için (Run workflow butonu)
+  repository_dispatch: # Dış cron servislerinden (cron-job.org vb.) istek gelince çalışması için
+    types: [trigger-retry]
   schedule:
-    - cron: '*/5 * * * *'
+    - cron: '*/5 * * * *' # GitHub'ın kendi zamanlayıcısı (yedek olarak dursun)
 
 jobs:
   launch:
