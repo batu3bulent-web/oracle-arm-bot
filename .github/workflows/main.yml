@@ -6,7 +6,7 @@ on:
     types: [trigger-retry]
   schedule:
     - cron: '*/5 * * * *' # 5 dakikada bir sunucu alma denemesi
-    - cron: '0 19 * * *'  # Her gün TSI 22:00'da günlük rapor
+    - cron: '0 19 * * *'  # Her gün TSI 22:00'da (UTC 19:00) günlük rapor
 
 jobs:
   launch:
@@ -15,43 +15,66 @@ jobs:
       - name: Checkout Repository
         uses: actions/checkout@v4
 
-      - name: Setup OCI CLI
-        uses: oracle-actions/setup-oci-cli@v1
-        with:
-          user_ocid: ${{ secrets.OCI_USER_OCID }}
-          tenancy_ocid: ${{ secrets.OCI_TENANCY_OCID }}
-          fingerprint: ${{ secrets.OCI_FINGERPRINT }}
-          private_key: ${{ secrets.OCI_KEY_FILE }}
-          region: ${{ secrets.OCI_REGION }}
+      - name: Install OCI CLI
+        run: |
+          python3 -m pip install --upgrade pip
+          pip install oci-cli
+
+      - name: Setup OCI Config
+        run: |
+          mkdir -p ~/.oci
+          
+          # Private Key'i satır kırılımları bozulmadan yaz
+          cat << 'EOF' > ~/.oci/oci_api_key.pem
+          ${{ secrets.OCI_KEY_FILE }}
+          EOF
+          chmod 600 ~/.oci/oci_api_key.pem
+
+          # Config dosyasını oluştur
+          cat <<EOF > ~/.oci/config
+          [DEFAULT]
+          user=${{ secrets.OCI_USER_OCID }}
+          fingerprint=${{ secrets.OCI_FINGERPRINT }}
+          key_file=/home/runner/.oci/oci_api_key.pem
+          tenancy=${{ secrets.OCI_TENANCY_OCID }}
+          region=${{ secrets.OCI_REGION }}
+          EOF
+          chmod 600 ~/.oci/config
 
       - name: Send Daily Report
         if: github.event.schedule == '0 19 * * *'
         run: |
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
             -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
-            -d "text=📊 *Günlük Oracle Raporu*%0A%0ASistem aktif olarak 5 dakikada bir Frankfurt sunucu kapasitesini zorlamaya devam ediyor." \
+            -d "text=📊 *Günlük Oracle Raporu*%0A%0ASistem aktif olarak Frankfurt sunucu kapasitesini zorlamaya devam ediyor." \
             -d "parse_mode=Markdown"
 
       - name: Launch Oracle ARM Instance
         if: github.event.schedule != '0 19 * * *'
         id: launch_vm
         continue-on-error: true
+        env:
+          SUPPRESS_LABEL_WARNING: "True"
+          OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING: "True"
         run: |
+          # SSH Public Key'i bozulmadan yaz
+          cat << 'EOF' > ssh_key.pub
+          ${{ secrets.OCI_SSH_PUBLIC_KEY }}
+          EOF
+
           oci compute instance launch \
             --availability-domain "LHiX:EU-FRANKFURT-1-AD-1" \
             --compartment-id "${{ secrets.OCI_TENANCY_OCID }}" \
             --shape "VM.Standard.A1.Flex" \
             --shape-config '{"ocpus":4,"memoryInGBs":24}' \
             --subnet-id "${{ secrets.OCI_SUBNET_OCID }}" \
-            --image-id "ocid1.image.oc1.eu-frankfurt-1.aaaaaaaakxfyq4y..." \
-            --display-name "arm-server" \
+            --image-id "${{ secrets.OCI_IMAGE_ID }}" \
+            --display-name "minecraft-server" \
             --assign-public-ip true \
-            --ssh-authorized-keys-file - << 'EOF'
-          ${{ secrets.OCI_SSH_PUBLIC_KEY }}
-          EOF
+            --ssh-authorized-keys-file ssh_key.pub
 
       - name: Send Success Telegram Notification
-        if: steps.launch_vm.outcome == 'success'
+        if: steps.launch_vm.outcome == 'success' && github.event.schedule != '0 19 * * *'
         run: |
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
             -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
