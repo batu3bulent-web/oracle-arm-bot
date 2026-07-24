@@ -15,6 +15,7 @@ jobs:
       - name: Setup OCI Config
         run: |
           mkdir -p ~/.oci
+          # Birebir ilk koddaki çalışan anahtar okuma yöntemi
           echo "${{ secrets.OCI_KEY_FILE }}" > ~/.oci/oci_api_key.pem
           chmod 600 ~/.oci/oci_api_key.pem
 
@@ -34,12 +35,12 @@ jobs:
           SUPPRESS_LABEL_WARNING: "True"
           OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING: "True"
         run: |
+          echo "${{ secrets.OCI_SSH_PUBLIC_KEY }}" > ssh_key.pub
+
           # Canonical Ubuntu 22.04 Minimal AMD Image (Frankfurt)
           IMAGE_ID="ocid1.image.oc1.eu-frankfurt-1.aaaaaaaa63x3s6vg3ooyqf5752sptp4gqnzpft3gzyxwqxyt52r5m3e3p32a"
 
-          echo "${{ secrets.OCI_SSH_PUBLIC_KEY }}" > ssh_key.pub
-
-          RESPONSE=$(oci compute instance launch \
+          oci compute instance launch \
             --availability-domain "LHiX:EU-FRANKFURT-1-AD-1" \
             --compartment-id "${{ secrets.OCI_TENANCY_OCID }}" \
             --shape "VM.Standard.E2.1.Micro" \
@@ -47,15 +48,12 @@ jobs:
             --image-id "$IMAGE_ID" \
             --display-name "micro-runner-vm" \
             --assign-public-ip true \
-            --ssh-authorized-keys-file ssh_key.pub)
-
-          INSTANCE_ID=$(echo "$RESPONSE" | jq -r '.data.id')
-          echo "INSTANCE_ID=$INSTANCE_ID" >> $GITHUB_ENV
+            --ssh-authorized-keys-file ssh_key.pub
 
       - name: Send Success Telegram Notification
         if: success()
         run: |
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
             -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
-            -d "text=✅ *AMD Micro VM Başarıyla Açıldı!*%0A%0A🚀 Küçük sunucun hazır, SSH ile bağlanabiliriz." \
+            -d "text=✅ *AMD Micro VM Başarıyla Kuruldu!*%0A%0A🚀 Küçük sunucun hazır." \
             -d "parse_mode=Markdown"
