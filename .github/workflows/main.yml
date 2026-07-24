@@ -19,7 +19,6 @@ jobs:
         run: |
           mkdir -p ~/.oci
           
-          # Çalışan Secret yapısının birebir aynısı
           cat << 'EOF' > ~/.oci/oci_api_key.pem
           ${{ secrets.OCI_PRIVATE_KEY }}
           EOF
@@ -45,15 +44,12 @@ jobs:
           ${{ secrets.OCI_SSH_PUBLIC_KEY }}
           EOF
 
-          # Frankfurt bölgesi Canonical Ubuntu 22.04 Minimal AMD Görüntüsü
-          IMAGE_ID="ocid1.image.oc1.eu-frankfurt-1.aaaaaaaa63x3s6vg3ooyqf5752sptp4gqnzpft3gzyxwqxyt52r5m3e3p32a"
-
           oci compute instance launch \
             --availability-domain "LHiX:EU-FRANKFURT-1-AD-1" \
             --compartment-id "${{ secrets.OCI_COMPARTMENT_OCID }}" \
             --shape "VM.Standard.E2.1.Micro" \
             --subnet-id "${{ secrets.OCI_SUBNET_ID }}" \
-            --image-id "$IMAGE_ID" \
+            --image-id "${{ secrets.OCI_IMAGE_ID }}" \
             --display-name "micro-runner-vm" \
             --assign-public-ip true \
             --ssh-authorized-keys-file ssh_key.pub
