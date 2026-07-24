@@ -34,7 +34,7 @@ jobs:
           EOF
           chmod 600 ~/.oci/config
 
-      - name: Launch Oracle AMD Micro Instance
+      - name: Fetch AMD Compatible Image & Launch
         id: launch_vm
         env:
           SUPPRESS_LABEL_WARNING: "True"
@@ -44,12 +44,23 @@ jobs:
           ${{ secrets.OCI_SSH_PUBLIC_KEY }}
           EOF
 
+          # AMD Micro ile uyumlu en güncel Ubuntu x86_64 imajının OCID'sini otomatik çekiyoruz
+          AMD_IMAGE_ID=$(oci compute image list \
+            --compartment-id "${{ secrets.OCI_COMPARTMENT_OCID }}" \
+            --operating-system "Canonical Ubuntu" \
+            --operating-system-version "22.04 Minimal" \
+            --shape "VM.Standard.E2.1.Micro" \
+            --query "data[0].id" \
+            --raw-output)
+
+          echo "Bulunan Uyumlu AMD İmaj ID: $AMD_IMAGE_ID"
+
           oci compute instance launch \
             --availability-domain "LHiX:EU-FRANKFURT-1-AD-1" \
             --compartment-id "${{ secrets.OCI_COMPARTMENT_OCID }}" \
             --shape "VM.Standard.E2.1.Micro" \
             --subnet-id "${{ secrets.OCI_SUBNET_ID }}" \
-            --image-id "${{ secrets.OCI_IMAGE_ID }}" \
+            --image-id "$AMD_IMAGE_ID" \
             --display-name "micro-runner-vm" \
             --assign-public-ip true \
             --ssh-authorized-keys-file ssh_key.pub
