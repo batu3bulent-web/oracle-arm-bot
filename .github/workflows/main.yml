@@ -1,12 +1,7 @@
-name: Oracle VM Auto Retry
+name: Launch Micro AMD Instance
 
 on:
-  workflow_dispatch:
-  repository_dispatch:
-    types: [trigger-retry]
-  schedule:
-    - cron: '*/5 * * * *' # 5 dakikada bir sunucu alma denemesi
-    - cron: '0 19 * * *'  # Her gün TSI 22:00'da (UTC 19:00) günlük rapor
+  workflow_dispatch: # Manuel tetiklemek için
 
 jobs:
   launch:
@@ -24,7 +19,7 @@ jobs:
         run: |
           mkdir -p ~/.oci
           
-          # Secret adınız OCI_PRIVATE_KEY olarak güncellendi
+          # Çalışan Secret yapısının birebir aynısı
           cat << 'EOF' > ~/.oci/oci_api_key.pem
           ${{ secrets.OCI_PRIVATE_KEY }}
           EOF
@@ -40,18 +35,8 @@ jobs:
           EOF
           chmod 600 ~/.oci/config
 
-      - name: Send Daily Report
-        if: github.event.schedule == '0 19 * * *'
-        run: |
-          curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
-            -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
-            -d "text=📊 *Günlük Oracle Raporu*%0A%0ASistem aktif olarak Frankfurt sunucu kapasitesini zorlamaya devam ediyor." \
-            -d "parse_mode=Markdown"
-
-      - name: Launch Oracle ARM Instance
-        if: github.event.schedule != '0 19 * * *'
+      - name: Launch Oracle AMD Micro Instance
         id: launch_vm
-        continue-on-error: true
         env:
           SUPPRESS_LABEL_WARNING: "True"
           OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING: "True"
@@ -60,21 +45,23 @@ jobs:
           ${{ secrets.OCI_SSH_PUBLIC_KEY }}
           EOF
 
+          # Frankfurt bölgesi Canonical Ubuntu 22.04 Minimal AMD Görüntüsü
+          IMAGE_ID="ocid1.image.oc1.eu-frankfurt-1.aaaaaaaa63x3s6vg3ooyqf5752sptp4gqnzpft3gzyxwqxyt52r5m3e3p32a"
+
           oci compute instance launch \
             --availability-domain "LHiX:EU-FRANKFURT-1-AD-1" \
             --compartment-id "${{ secrets.OCI_COMPARTMENT_OCID }}" \
-            --shape "VM.Standard.A1.Flex" \
-            --shape-config '{"ocpus":4,"memoryInGBs":24}' \
+            --shape "VM.Standard.E2.1.Micro" \
             --subnet-id "${{ secrets.OCI_SUBNET_ID }}" \
-            --image-id "${{ secrets.OCI_IMAGE_ID }}" \
-            --display-name "arm-server" \
+            --image-id "$IMAGE_ID" \
+            --display-name "micro-runner-vm" \
             --assign-public-ip true \
             --ssh-authorized-keys-file ssh_key.pub
 
       - name: Send Success Telegram Notification
-        if: steps.launch_vm.outcome == 'success' && github.event.schedule != '0 19 * * *'
+        if: steps.launch_vm.outcome == 'success'
         run: |
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
             -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
-            -d "text=🎉 *Oracle Sunucusu Başarıyla Kuruldu!*%0A%0A4 OCPU / 24GB RAM ARM sunucun başarıyla açıldı." \
+            -d "text=🚀 *AMD Micro Sunucun Başarıyla Kuruldu!*%0A%0AMicro VM aktif duruma geldi." \
             -d "parse_mode=Markdown"
