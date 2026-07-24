@@ -46,18 +46,21 @@ jobs:
           AD_NAME=$(oci iam availability-domain list --compartment-id "${{ secrets.OCI_TENANCY_OCID }}" --query "data[0].name" --raw-output)
           echo "Kullanılacak AD: $AD_NAME"
 
-          # 2. AMD (VM.Standard.E2.1.Micro) ile %100 uyumlu Canonical Ubuntu 22.04 imajını sorgulama
+          # 2. Aktif (AVAILABLE) olan en güncel Canonical Ubuntu 22.04 AMD imajı sorgulanıyor
           AMD_IMAGE_ID=$(oci compute image list \
             --compartment-id "${{ secrets.OCI_TENANCY_OCID }}" \
             --operating-system "Canonical Ubuntu" \
             --operating-system-version "22.04" \
             --shape "VM.Standard.E2.1.Micro" \
+            --lifecycle-state "AVAILABLE" \
+            --sort-by "TIMECREATED" \
+            --sort-order "DESC" \
             --query "data[0].id" \
             --raw-output)
 
-          echo "Bulunan AMD İmaj ID: $AMD_IMAGE_ID"
+          echo "Seçilen Aktif AMD İmaj ID: $AMD_IMAGE_ID"
 
-          # 3. Sunucuyu Başlatma
+          # 3. Sunucu Başlatma
           oci compute instance launch \
             --availability-domain "$AD_NAME" \
             --compartment-id "${{ secrets.OCI_COMPARTMENT_OCID }}" \
