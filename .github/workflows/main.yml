@@ -42,17 +42,29 @@ jobs:
         run: |
           python3 -c "import os; open('ssh_key.pub', 'w').write(os.environ['SSH_KEY_CONTENT'].strip() + '\n')"
 
-          # Availability Domain otomatik çekiliyor
+          # Availability Domain bilgisi alınıyor
           AD_NAME=$(oci iam availability-domain list --compartment-id "${{ secrets.OCI_TENANCY_OCID }}" --query "data[0].name" --raw-output)
           echo "Kullanılacak AD: $AD_NAME"
 
-          # Doğrudan secret'taki OCI_IMAGE_ID kullanılıyor
+          # AMD (x86_64) Uyumlu Canonical Ubuntu 22.04 İmajını Sorgulama
+          AMD_IMAGE_ID=$(oci compute image list \
+            --compartment-id "${{ secrets.OCI_TENANCY_OCID }}" \
+            --operating-system "Canonical Ubuntu" \
+            --operating-system-version "22.04" \
+            --shape "VM.Standard.E2.1.Micro" \
+            --architecture "x86_64" \
+            --query "data[0].id" \
+            --raw-output)
+
+          echo "Bulunan Uyumlu AMD İmaj ID: $AMD_IMAGE_ID"
+
+          # Sunucuyu Başlatma
           oci compute instance launch \
             --availability-domain "$AD_NAME" \
             --compartment-id "${{ secrets.OCI_COMPARTMENT_OCID }}" \
             --shape "VM.Standard.E2.1.Micro" \
             --subnet-id "${{ secrets.OCI_SUBNET_ID }}" \
-            --image-id "${{ secrets.OCI_IMAGE_ID }}" \
+            --image-id "$AMD_IMAGE_ID" \
             --display-name "micro-runner-vm" \
             --assign-public-ip true \
             --ssh-authorized-keys-file ssh_key.pub
