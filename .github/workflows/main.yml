@@ -1,7 +1,7 @@
 name: Launch Micro AMD Instance
 
 on:
-  workflow_dispatch: # Manuel tetiklemek için
+  workflow_dispatch:
 
 jobs:
   launch:
@@ -15,13 +15,14 @@ jobs:
           python3 -m pip install --upgrade pip setuptools
           pip install oci-cli
 
+      # Özel anahtarı senin secret isminle (OCI_PRIVATE_KEY) yazdırıyoruz
       - name: Setup OCI Config
+        env:
+          OCI_KEY_CONTENT: ${{ secrets.OCI_PRIVATE_KEY }}
         run: |
           mkdir -p ~/.oci
           
-          cat << 'EOF' > ~/.oci/oci_api_key.pem
-          ${{ secrets.OCI_KEY_FILE }}
-          EOF
+          python3 -c "import os; open('/home/runner/.oci/oci_api_key.pem', 'w').write(os.environ['OCI_KEY_CONTENT'].strip() + '\n')"
           chmod 600 ~/.oci/oci_api_key.pem
 
           cat <<EOF > ~/.oci/config
@@ -39,14 +40,12 @@ jobs:
         env:
           SUPPRESS_LABEL_WARNING: "True"
           OCI_CLI_SUPPRESS_FILE_PERMISSIONS_WARNING: "True"
+          SSH_KEY_CONTENT: ${{ secrets.OCI_SSH_PUBLIC_KEY }}
         run: |
-          cat << 'EOF' > ssh_key.pub
-          ${{ secrets.OCI_SSH_PUBLIC_KEY }}
-          EOF
+          python3 -c "import os; open('ssh_key.pub', 'w').write(os.environ['SSH_KEY_CONTENT'].strip() + '\n')"
 
-          # Uyumlu AMD imajını otomatik sorgulama
           AMD_IMAGE_ID=$(oci compute image list \
-            --compartment-id "${{ secrets.OCI_TENANCY_OCID }}" \
+            --compartment-id "${{ secrets.OCI_COMPARTMENT_OCID }}" \
             --operating-system "Canonical Ubuntu" \
             --operating-system-version "22.04 Minimal" \
             --shape "VM.Standard.E2.1.Micro" \
@@ -57,9 +56,9 @@ jobs:
 
           oci compute instance launch \
             --availability-domain "LHiX:EU-FRANKFURT-1-AD-1" \
-            --compartment-id "${{ secrets.OCI_TENANCY_OCID }}" \
+            --compartment-id "${{ secrets.OCI_COMPARTMENT_OCID }}" \
             --shape "VM.Standard.E2.1.Micro" \
-            --subnet-id "${{ secrets.OCI_SUBNET_OCID }}" \
+            --subnet-id "${{ secrets.OCI_SUBNET_ID }}" \
             --image-id "$AMD_IMAGE_ID" \
             --display-name "micro-runner-vm" \
             --assign-public-ip true \
