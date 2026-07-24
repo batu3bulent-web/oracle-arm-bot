@@ -1,4 +1,4 @@
-name: Launch Micro AMD Instance
+name: Launch Micro AMD Instance (Debug & Launch)
 
 on:
   workflow_dispatch:
@@ -20,7 +20,6 @@ jobs:
           OCI_KEY_CONTENT: ${{ secrets.OCI_PRIVATE_KEY }}
         run: |
           mkdir -p ~/.oci
-          
           python3 -c "import os; open('/home/runner/.oci/oci_api_key.pem', 'w').write(os.environ['OCI_KEY_CONTENT'].strip() + '\n')"
           chmod 600 ~/.oci/oci_api_key.pem
 
@@ -34,7 +33,7 @@ jobs:
           EOF
           chmod 600 ~/.oci/config
 
-      - name: Launch Oracle AMD Micro Instance
+      - name: Validate Resources & Launch
         id: launch_vm
         env:
           SUPPRESS_LABEL_WARNING: "True"
@@ -43,34 +42,32 @@ jobs:
         run: |
           python3 -c "import os; open('ssh_key.pub', 'w').write(os.environ['SSH_KEY_CONTENT'].strip() + '\n')"
 
-          # 1. Hesaba özel dinamik Availability Domain ismini çekme
-          AD_NAME=$(oci iam availability-domain list \
-            --compartment-id "${{ secrets.OCI_TENANCY_OCID }}" \
-            --query "data[0].name" \
-            --raw-output)
+          # 1. Subnet Kontrolü
+          echo "Checking Subnet..."
+          oci network subnet get --subnet-id "${{ secrets.OCI_SUBNET_ID }}" > /dev/null || { echo "❌ OCI_SUBNET_ID geçersiz veya bulunamadı!"; exit 1; }
 
+          # 2. Availability Domain Al
+          AD_NAME=$(oci iam availability-domain list --compartment-id "${{ secrets.OCI_TENANCY_OCID }}" --query "data[0].name" --raw-output)
           echo "Kullanılacak AD: $AD_NAME"
 
-          # 2. AMD Uyumlu Ubuntu İmajını çekme (Yoksa secret'taki OCI_IMAGE_ID kullanılır)
+          # 3. Canonical Ubuntu 22.04 AMD İmajı Sorgula
           AMD_IMAGE_ID=$(oci compute image list \
             --compartment-id "${{ secrets.OCI_TENANCY_OCID }}" \
             --operating-system "Canonical Ubuntu" \
-            --operating-system-version "22.04 Minimal" \
+            --operating-system-version "22.04" \
             --shape "VM.Standard.E2.1.Micro" \
             --query "data[0].id" \
             --raw-output)
 
-          # Eğer sorgu boş dönerse repondaki OCI_IMAGE_ID secret'ını yedek olarak kullan
           if [ -z "$AMD_IMAGE_ID" ] || [ "$AMD_IMAGE_ID" == "null" ]; then
             AMD_IMAGE_ID="${{ secrets.OCI_IMAGE_ID }}"
           fi
-
           echo "Kullanılacak İmaj ID: $AMD_IMAGE_ID"
 
-          # 3. Micro VM Başlatma
+          # 4. Sunucu Başlatma (Compartment olarak OCI_COMPARTMENT_OCID kullanılır)
           oci compute instance launch \
             --availability-domain "$AD_NAME" \
-            --compartment-id "${{ secrets.OCI_TENANCY_OCID }}" \
+            --compartment-id "${{ secrets.OCI_COMPARTMENT_OCID }}" \
             --shape "VM.Standard.E2.1.Micro" \
             --subnet-id "${{ secrets.OCI_SUBNET_ID }}" \
             --image-id "$AMD_IMAGE_ID" \
@@ -83,5 +80,5 @@ jobs:
         run: |
           curl -s -X POST "https://api.telegram.org/bot${{ secrets.TELEGRAM_BOT_TOKEN }}/sendMessage" \
             -d "chat_id=${{ secrets.TELEGRAM_CHAT_ID }}" \
-            -d "text=🚀 *AMD Micro Sunucun Başarıyla Kuruldu!*%0A%0AMicro VM aktif duruma geldi." \
+            -d "text=🚀 *AMD Micro Sunucun Başarıyla Kuruldu!*" \
             -d "parse_mode=Markdown"
