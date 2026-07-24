@@ -1,31 +1,42 @@
 name: Launch Micro AMD Instance
 
 on:
-  workflow_dispatch: # Manuel çalıştırmak için (Run workflow)
+  workflow_dispatch:
 
 jobs:
   launch-micro:
     runs-on: ubuntu-latest
     steps:
-      - name: Setup OCI CLI
-        uses: oracle-actions/setup-oci-cli@v1
-        with:
-          user_ocid: ${{ secrets.OCI_USER_OCID }}
-          tenancy_ocid: ${{ secrets.OCI_TENANCY_OCID }}
-          fingerprint: ${{ secrets.OCI_FINGERPRINT }}
-          private_key: ${{ secrets.OCI_KEY_FILE }}
-          region: ${{ secrets.OCI_REGION }}
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Python & Install OCI CLI
+        run: |
+          python3 -m pip install --upgrade pip
+          pip install oci-cli
+
+      - name: Configure OCI CLI Credentials
+        run: |
+          mkdir -p ~/.oci
+          echo "${{ secrets.OCI_KEY_FILE }}" > ~/.oci/oci_api_key.pem
+          chmod 600 ~/.oci/oci_api_key.pem
+
+          cat <<EOF > ~/.oci/config
+          [DEFAULT]
+          user=${{ secrets.OCI_USER_OCID }}
+          fingerprint=${{ secrets.OCI_FINGERPRINT }}
+          key_file=~/.oci/oci_api_key.pem
+          tenancy=${{ secrets.OCI_TENANCY_OCID }}
+          region=${{ secrets.OCI_REGION }}
+          EOF
 
       - name: Launch AMD Micro Instance
         id: launch_micro
         run: |
-          # Canonical Ubuntu 22.04 Minimal Minimal AMD Image OCID (Frankfurt)
-          # NOT: Eğer imaj hatası verirse paneldeki varsayılan Ubuntu AMD imaj OCID'sini Secrets'a veya buraya koyabilirsin.
+          # Canonical Ubuntu 22.04 Minimal AMD Image OCID (Frankfurt)
           IMAGE_ID="ocid1.image.oc1.eu-frankfurt-1.aaaaaaaa63x3s6vg3ooyqf5752sptp4gqnzpft3gzyxwqxyt52r5m3e3p32a"
 
           echo "Micro VM kuruluyor..."
-          
-          # SSH anahtarını geçici dosyaya kaydet
           echo "${{ secrets.OCI_SSH_PUBLIC_KEY }}" > ssh_key.pub
 
           RESPONSE=$(oci compute instance launch \
@@ -38,7 +49,6 @@ jobs:
             --assign-public-ip true \
             --ssh-authorized-keys-file ssh_key.pub)
 
-          # Oluşturulan sunucunun ID'sini al
           INSTANCE_ID=$(echo "$RESPONSE" | jq -r '.data.id')
           echo "INSTANCE_ID=$INSTANCE_ID" >> $GITHUB_ENV
 
