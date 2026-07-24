@@ -57,7 +57,6 @@ jobs:
             --image-id "${{ secrets.OCI_IMAGE_ID }}" \
             --display-name minecraft-server \
             --assign-public-ip true \
-            --connect-timeout 60 \
             --ssh-authorized-keys-file <(echo "${{ secrets.OCI_SSH_PUBLIC_KEY }}")
 
       - name: Send Success Telegram Notification
